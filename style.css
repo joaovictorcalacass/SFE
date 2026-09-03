@@ -239,6 +239,7 @@ h1 {
     padding: 20px;
     margin-top: 15px;
     box-shadow: var(--shadow-card);
+    overflow-x: auto;
 }
 
 .two-columns {
@@ -316,6 +317,7 @@ h1 {
 
 .action-buttons {
     display: flex;
+    align-items: center;
     gap: 6px;
 }
 
@@ -324,9 +326,9 @@ h1 {
     background: #e0f2fe;
     color: #0369a1;
     border-radius: 7px;
-    padding: 6px 9px;
+    padding: 6px 10px;
     cursor: pointer;
-    font-size: 11px;
+    font-size: 12px;
     font-weight: bold;
     transition: background-color 0.15s, color 0.15s;
 }
@@ -342,8 +344,11 @@ h1 {
     border-radius: 7px;
     padding: 6px 9px;
     cursor: pointer;
-    font-size: 11px;
+    font-size: 13px;
     color: #4b5563;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     transition: background-color 0.15s, color 0.15s;
 }
 
@@ -376,31 +381,51 @@ h1 {
     font-size: 13px;
 }
 
+/* Linha Lançamentos */
 .launch-row {
     display: grid;
-    grid-template-columns: 90px 1fr 120px 120px 120px;
+    grid-template-columns: 100px 1fr 120px 120px 105px;
     gap: 10px;
     align-items: center;
     padding: 12px 0;
     border-bottom: 1px solid var(--color-border-subtle);
     font-size: 13px;
+    min-width: 600px;
 }
 
 .launch-row:last-child {
     border-bottom: none;
 }
 
-.table-row {
+/* Linha Cartões */
+.table-row-cartao {
     display: grid;
-    grid-template-columns: 1.5fr 1fr 1fr 1fr 80px;
+    grid-template-columns: 1.3fr 1fr 75px 1fr 1.1fr 1fr 105px;
     gap: 10px;
     align-items: center;
     padding: 13px 0;
     border-bottom: 1px solid var(--color-border-subtle);
     font-size: 13px;
+    min-width: 720px;
 }
 
-.table-row:last-child {
+.table-row-cartao:last-child {
+    border-bottom: none;
+}
+
+/* Linha Contas Fixas */
+.table-row-conta {
+    display: grid;
+    grid-template-columns: 1.5fr 75px 1fr 1.1fr 80px 105px;
+    gap: 10px;
+    align-items: center;
+    padding: 13px 0;
+    border-bottom: 1px solid var(--color-border-subtle);
+    font-size: 13px;
+    min-width: 650px;
+}
+
+.table-row-conta:last-child {
     border-bottom: none;
 }
 
@@ -432,6 +457,7 @@ h1 {
     border: 1px solid #dce1e5;
     border-radius: 7px;
     font-size: 13px;
+    background: #ffffff;
 }
 
 .help-text {
@@ -466,12 +492,14 @@ h1 {
 }
 
 .modal-content {
-    width: min(450px, 100%);
+    width: min(460px, 100%);
     background: var(--color-surface);
     border-radius: 15px;
     padding: 25px;
     position: relative;
     box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+    max-height: 90vh;
+    overflow-y: auto;
 }
 
 .modal-content h2 {
@@ -520,7 +548,7 @@ h1 {
 
 .submit-button {
     width: 100%;
-    margin-top: 5px;
+    margin-top: 8px;
 }
 
 /* =====================================================
@@ -564,22 +592,6 @@ h1 {
     .summary-cards,
     .two-columns {
         grid-template-columns: 1fr;
-    }
-
-    .launch-row {
-        grid-template-columns: 70px 1fr 90px 80px;
-    }
-
-    .launch-row .badge {
-        display: none;
-    }
-
-    .table-row {
-        grid-template-columns: 1fr 1fr;
-    }
-
-    .table-header {
-        display: none;
     }
 
     .button-group {
