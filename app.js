@@ -1,6 +1,6 @@
 /* =====================================================
    CONTROLE FINANCEIRO FAMILIAR — V1
-   (DATA/HORA EM TEMPO REAL + EDIÇÃO + MÁSCARA INTELIGENTE)
+   (FORMULÁRIOS COMPLETOS VIA MODAL + LIMITE + VENCIMENTO + 🗑)
 ===================================================== */
 
 "use strict";
@@ -54,8 +54,8 @@ const dataAtual = new Date();
 
 let state = {
     dados: carregarDados(),
-    anoReferencia: dataAtual.getFullYear(), // Ano atual do sistema
-    mesReferencia: dataAtual.getMonth()     // Mês atual do sistema (0 a 11)
+    anoReferencia: dataAtual.getFullYear(),
+    mesReferencia: dataAtual.getMonth() // 0 = Jan ... 11 = Dez
 };
 
 function carregarDados() {
@@ -108,7 +108,6 @@ function formatarDataBR(dataStr) {
     return dia && mes && ano ? `${dia}/${mes}/${ano}` : dataStr;
 }
 
-// Data e Hora automáticas do momento atual
 function dataHojeInput() {
     const agora = new Date();
     const ano = agora.getFullYear();
@@ -124,7 +123,6 @@ function horaAtualInput() {
     return `${horas}:${minutos}`;
 }
 
-// Tratamento de Moeda Inteligente
 function parseMoedaBR(valorStr) {
     if (!valorStr) return 0;
     const limpo = String(valorStr).trim().replace("R$", "").trim().replace(",", ".");
@@ -195,7 +193,7 @@ function calcularResumoMensal() {
 
     let totalCartoes = 0;
     for (const c of state.dados.cartoes) {
-        const valor = (c.real === "" || c.real === null) ? c.previsao : c.real;
+        const valor = (c.real === "" || c.real === null || c.real === undefined) ? c.previsao : c.real;
         totalCartoes += Number(valor) || 0;
     }
 
@@ -222,7 +220,6 @@ function renderMesTopo() {
     const d = new Date(state.anoReferencia, state.mesReferencia, 1);
     const texto = d.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
     const formatado = texto.charAt(0).toUpperCase() + texto.slice(1);
-
     document.getElementById("monthLabel").textContent = formatado.replace(" de ", " / ");
 }
 
@@ -255,7 +252,6 @@ function obterLancamentosUnificados(entradasMes, gastosMes) {
         ...gastosMes.map(g => ({ ...g, tipo: "Gasto" })),
         ...entradasMes.map(e => ({ ...e, tipo: "Entrada" }))
     ];
-    // Ordena por data e hora decrescentes
     return lista.sort((a, b) => {
         const dataA = `${a.data}T${a.hora || "00:00"}`;
         const dataB = `${b.data}T${b.hora || "00:00"}`;
@@ -333,8 +329,9 @@ function renderTodosLancamentos(lancamentos) {
                     <button class="delete-button" 
                             data-action="excluir-lancamento" 
                             data-tipo="${item.tipo}" 
-                            data-id="${item.id}">
-                        Excluir
+                            data-id="${item.id}"
+                            title="Excluir">
+                        🗑
                     </button>
                 </div>
             </div>
@@ -353,33 +350,48 @@ function renderCartoes() {
     }
 
     const headerHTML = `
-        <div class="table-row table-header">
+        <div class="table-row-cartao table-header">
             <span>Cartão</span>
+            <span>Limite</span>
+            <span>Venc.</span>
             <span>Previsão</span>
             <span>Valor real</span>
             <span>Efetivo</span>
-            <span>Ação</span>
+            <span>Ações</span>
         </div>
     `;
 
     const rowsHTML = state.dados.cartoes.map(cartao => {
-        const efetivo = (cartao.real === "" || cartao.real === null) ? cartao.previsao : cartao.real;
+        const efetivo = (cartao.real === "" || cartao.real === null || cartao.real === undefined) ? cartao.previsao : cartao.real;
+        const vencimentoTexto = cartao.vencimento ? `Dia ${cartao.vencimento}` : "—";
+        const limiteTexto = cartao.limite ? dinheiro(cartao.limite) : "—";
 
         return `
-            <div class="table-row">
+            <div class="table-row-cartao">
                 <strong>${escaparHTML(cartao.nome)}</strong>
+                <span>${limiteTexto}</span>
+                <span><span class="badge">${vencimentoTexto}</span></span>
                 <span>${dinheiro(cartao.previsao)}</span>
                 <input class="money-input input-cartao-real" 
-                       type="number" 
-                       step="0.01" 
-                       value="${cartao.real ?? ""}" 
+                       type="text" 
+                       inputmode="decimal"
+                       value="${cartao.real !== "" && cartao.real !== null && cartao.real !== undefined ? Number(cartao.real).toFixed(2).replace(".", ",") : ""}" 
+                       placeholder="0,00"
                        data-id="${cartao.id}">
                 <strong>${dinheiro(efetivo)}</strong>
-                <button class="delete-button" 
-                        data-action="excluir-cartao" 
-                        data-id="${cartao.id}">
-                    Excluir
-                </button>
+                <div class="action-buttons">
+                    <button class="edit-button" 
+                            data-action="editar-cartao" 
+                            data-id="${cartao.id}">
+                        Editar
+                    </button>
+                    <button class="delete-button" 
+                            data-action="excluir-cartao" 
+                            data-id="${cartao.id}"
+                            title="Excluir">
+                        🗑
+                    </button>
+                </div>
             </div>
         `;
     }).join("");
@@ -396,38 +408,53 @@ function renderContas() {
     }
 
     const headerHTML = `
-        <div class="table-row table-header">
+        <div class="table-row-conta table-header">
             <span>Conta</span>
+            <span>Venc.</span>
             <span>Valor padrão</span>
             <span>Este mês</span>
             <span>Ativa</span>
-            <span>Ação</span>
+            <span>Ações</span>
         </div>
     `;
 
-    const rowsHTML = state.dados.contas.map(conta => `
-        <div class="table-row">
-            <strong>${escaparHTML(conta.nome)}</strong>
-            <span>${dinheiro(conta.padrao)}</span>
-            <input class="money-input input-conta-mes" 
-                   type="number" 
-                   step="0.01" 
-                   value="${conta.mes ?? ""}" 
-                   data-id="${conta.id}">
-            <label>
-                <input type="checkbox" 
-                       class="check-conta-ativa" 
-                       data-id="${conta.id}" 
-                       ${conta.ativa ? "checked" : ""}>
-                Sim
-            </label>
-            <button class="delete-button" 
-                    data-action="excluir-conta" 
-                    data-id="${conta.id}">
-                Excluir
-            </button>
-        </div>
-    `).join("");
+    const rowsHTML = state.dados.contas.map(conta => {
+        const vencimentoTexto = conta.vencimento ? `Dia ${conta.vencimento}` : "—";
+
+        return `
+            <div class="table-row-conta">
+                <strong>${escaparHTML(conta.nome)}</strong>
+                <span><span class="badge">${vencimentoTexto}</span></span>
+                <span>${dinheiro(conta.padrao)}</span>
+                <input class="money-input input-conta-mes" 
+                       type="text" 
+                       inputmode="decimal"
+                       value="${Number(conta.mes || 0).toFixed(2).replace(".", ",")}" 
+                       placeholder="0,00"
+                       data-id="${conta.id}">
+                <label style="display:flex; align-items:center; gap:5px; cursor:pointer;">
+                    <input type="checkbox" 
+                           class="check-conta-ativa" 
+                           data-id="${conta.id}" 
+                           ${conta.ativa ? "checked" : ""}>
+                    Sim
+                </label>
+                <div class="action-buttons">
+                    <button class="edit-button" 
+                            data-action="editar-conta" 
+                            data-id="${conta.id}">
+                        Editar
+                    </button>
+                    <button class="delete-button" 
+                            data-action="excluir-conta" 
+                            data-id="${conta.id}"
+                            title="Excluir">
+                        🗑
+                    </button>
+                </div>
+            </div>
+        `;
+    }).join("");
 
     container.innerHTML = headerHTML + rowsHTML;
 }
@@ -445,7 +472,7 @@ function renderizarTudo() {
 }
 
 /* =====================================================
-   7. MODAL & FORMULÁRIOS
+   7. MODAL UNIFICADO PARA TODAS AS INSERÇÕES/EDIÇÕES
 ===================================================== */
 const modal = document.getElementById("modal");
 const modalTitle = document.getElementById("modalTitle");
@@ -453,98 +480,187 @@ const modalForm = document.getElementById("modalForm");
 
 function abrirModal(tipo, idEdicao = null) {
     modal.classList.remove("hidden");
-    const isGasto = tipo === "gasto";
     const isEdicao = idEdicao !== null;
 
     let itemExistente = null;
     if (isEdicao) {
-        const colecao = isGasto ? state.dados.gastos : state.dados.entradas;
-        itemExistente = colecao.find(item => String(item.id) === String(idEdicao));
+        if (tipo === "gasto") itemExistente = state.dados.gastos.find(g => String(g.id) === String(idEdicao));
+        if (tipo === "entrada") itemExistente = state.dados.entradas.find(e => String(e.id) === String(idEdicao));
+        if (tipo === "cartao") itemExistente = state.dados.cartoes.find(c => String(c.id) === String(idEdicao));
+        if (tipo === "conta") itemExistente = state.dados.contas.find(c => String(c.id) === String(idEdicao));
     }
 
-    modalTitle.textContent = isEdicao
-        ? (isGasto ? "Editar gasto" : "Editar entrada")
-        : (isGasto ? "Novo gasto" : "Nova entrada");
+    // ================= CARTÃO =================
+    if (tipo === "cartao") {
+        modalTitle.textContent = isEdicao ? "Editar cartão" : "Novo cartão";
+        const limitePadrao = itemExistente?.limite ? Number(itemExistente.limite).toFixed(2).replace(".", ",") : "";
+        const previsaoPadrao = itemExistente?.previsao ? Number(itemExistente.previsao).toFixed(2).replace(".", ",") : "";
 
-    const dataPadrao = itemExistente ? itemExistente.data : dataHojeInput();
-    const horaPadrao = itemExistente?.hora ? itemExistente.hora : horaAtualInput();
-    const descPadrao = itemExistente ? itemExistente.descricao : "";
-    const valorPadrao = itemExistente ? Number(itemExistente.valor).toFixed(2).replace(".", ",") : "";
+        modalForm.innerHTML = `
+            <input type="hidden" name="tipo" value="cartao">
+            <input type="hidden" name="id" value="${idEdicao ?? ""}">
 
-    const optionsCategoria = CONFIG.categorias.map(c => `
-        <option value="${c}" ${itemExistente?.categoria === c ? "selected" : ""}>${c}</option>
-    `).join("");
-
-    const optionsPessoas = CONFIG.pessoas.map(p => `
-        <option value="${p}" ${itemExistente?.pessoa === p ? "selected" : ""}>${p}</option>
-    `).join("");
-
-    const optionsFormas = CONFIG.formasPagamento.map(f => `
-        <option value="${f}" ${itemExistente?.forma === f ? "selected" : ""}>${f}</option>
-    `).join("");
-
-    const optionsOrigem = CONFIG.origens.map(o => `
-        <option value="${o}" ${itemExistente?.origem === o ? "selected" : ""}>${o}</option>
-    `).join("");
-
-    modalForm.innerHTML = `
-        <input type="hidden" name="tipo" value="${tipo}">
-        <input type="hidden" name="id" value="${idEdicao ?? ""}">
-        
-        <div class="form-group" style="display: flex; gap: 10px;">
-            <div style="flex: 2;">
-                <label>Data</label>
-                <input name="data" type="date" value="${dataPadrao}" required>
-            </div>
-            <div style="flex: 1;">
-                <label>Hora</label>
-                <input name="hora" type="time" value="${horaPadrao}" required>
-            </div>
-        </div>
-
-        <div class="form-group">
-            <label>Descrição</label>
-            <input name="descricao" value="${escaparHTML(descPadrao)}" placeholder="${isGasto ? "Ex.: Carvão" : "Ex.: Venda da espetaria"}" required>
-        </div>
-
-        <div class="form-group">
-            <label>Valor (R$)</label>
-            <input name="valor" 
-                   id="inputModalValor" 
-                   type="text" 
-                   inputmode="decimal" 
-                   value="${valorPadrao}" 
-                   placeholder="0,00" 
-                   required>
-        </div>
-
-        ${isGasto ? `
             <div class="form-group">
-                <label>Categoria</label>
-                <select name="categoria">${optionsCategoria}</select>
+                <label>Nome do Cartão</label>
+                <input name="nome" value="${escaparHTML(itemExistente?.nome ?? "")}" placeholder="Ex.: Nubank, Assaí" required>
             </div>
-            <div class="form-group">
-                <label>Pessoa</label>
-                <select name="pessoa">${optionsPessoas}</select>
-            </div>
-            <div class="form-group">
-                <label>Forma de pagamento</label>
-                <select name="forma">${optionsFormas}</select>
-            </div>
-        ` : `
-            <div class="form-group">
-                <label>Origem</label>
-                <select name="origem">${optionsOrigem}</select>
-            </div>
-        `}
 
-        <button type="submit" class="button primary submit-button">
-            ${isEdicao ? "Salvar alterações" : (isGasto ? "Salvar gasto" : "Salvar entrada")}
-        </button>
-    `;
+            <div class="form-group" style="display: flex; gap: 10px;">
+                <div style="flex: 1;">
+                    <label>Limite Total (R$)</label>
+                    <input name="limite" class="moeda-input" type="text" inputmode="decimal" value="${limitePadrao}" placeholder="0,00">
+                </div>
+                <div style="flex: 1;">
+                    <label>Dia do Vencimento</label>
+                    <input name="vencimento" type="number" min="1" max="31" value="${itemExistente?.vencimento ?? ""}" placeholder="Ex.: 10" required>
+                </div>
+            </div>
 
-    const inputValor = document.getElementById("inputModalValor");
-    inputValor.addEventListener("blur", () => formatarBlurInput(inputValor));
+            <div class="form-group">
+                <label>Previsão da Fatura (R$)</label>
+                <input name="previsao" class="moeda-input" type="text" inputmode="decimal" value="${previsaoPadrao}" placeholder="0,00" required>
+            </div>
+
+            <button type="submit" class="button primary submit-button">
+                ${isEdicao ? "Salvar alterações" : "Salvar cartão"}
+            </button>
+        `;
+    }
+
+    // ================= CONTA FIXA =================
+    else if (tipo === "conta") {
+        modalTitle.textContent = isEdicao ? "Editar conta fixa" : "Nova conta fixa";
+        const padraoVal = itemExistente?.padrao ? Number(itemExistente.padrao).toFixed(2).replace(".", ",") : "";
+        const mesVal = itemExistente?.mes ? Number(itemExistente.mes).toFixed(2).replace(".", ",") : "";
+
+        modalForm.innerHTML = `
+            <input type="hidden" name="tipo" value="conta">
+            <input type="hidden" name="id" value="${idEdicao ?? ""}">
+
+            <div class="form-group">
+                <label>Nome da Conta</label>
+                <input name="nome" value="${escaparHTML(itemExistente?.nome ?? "")}" placeholder="Ex.: Energisa, Internet" required>
+            </div>
+
+            <div class="form-group">
+                <label>Dia do Vencimento</label>
+                <input name="vencimento" type="number" min="1" max="31" value="${itemExistente?.vencimento ?? ""}" placeholder="Ex.: 15" required>
+            </div>
+
+            <div class="form-group" style="display: flex; gap: 10px;">
+                <div style="flex: 1;">
+                    <label>Valor Padrão (R$)</label>
+                    <input name="padrao" class="moeda-input" type="text" inputmode="decimal" value="${padraoVal}" placeholder="0,00" required>
+                </div>
+                <div style="flex: 1;">
+                    <label>Valor Deste Mês (R$)</label>
+                    <input name="mes" class="moeda-input" type="text" inputmode="decimal" value="${mesVal || padraoVal}" placeholder="0,00" required>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Conta Ativa?</label>
+                <select name="ativa">
+                    <option value="true" ${itemExistente?.ativa !== false ? "selected" : ""}>Sim</option>
+                    <option value="false" ${itemExistente?.ativa === false ? "selected" : ""}>Não</option>
+                </select>
+            </div>
+
+            <button type="submit" class="button primary submit-button">
+                ${isEdicao ? "Salvar alterações" : "Salvar conta"}
+            </button>
+        `;
+    }
+
+    // ================= GASTO / ENTRADA =================
+    else {
+        const isGasto = tipo === "gasto";
+        modalTitle.textContent = isEdicao
+            ? (isGasto ? "Editar gasto" : "Editar entrada")
+            : (isGasto ? "Novo gasto" : "Nova entrada");
+
+        const dataPadrao = itemExistente ? itemExistente.data : dataHojeInput();
+        const horaPadrao = itemExistente?.hora ? itemExistente.hora : horaAtualInput();
+        const descPadrao = itemExistente ? itemExistente.descricao : "";
+        const valorPadrao = itemExistente ? Number(itemExistente.valor).toFixed(2).replace(".", ",") : "";
+
+        const optionsCategoria = CONFIG.categorias.map(c => `
+            <option value="${c}" ${itemExistente?.categoria === c ? "selected" : ""}>${c}</option>
+        `).join("");
+
+        const optionsPessoas = CONFIG.pessoas.map(p => `
+            <option value="${p}" ${itemExistente?.pessoa === p ? "selected" : ""}>${p}</option>
+        `).join("");
+
+        const optionsFormas = CONFIG.formasPagamento.map(f => `
+            <option value="${f}" ${itemExistente?.forma === f ? "selected" : ""}>${f}</option>
+        `).join("");
+
+        const optionsOrigem = CONFIG.origens.map(o => `
+            <option value="${o}" ${itemExistente?.origem === o ? "selected" : ""}>${o}</option>
+        `).join("");
+
+        modalForm.innerHTML = `
+            <input type="hidden" name="tipo" value="${tipo}">
+            <input type="hidden" name="id" value="${idEdicao ?? ""}">
+            
+            <div class="form-group" style="display: flex; gap: 10px;">
+                <div style="flex: 2;">
+                    <label>Data</label>
+                    <input name="data" type="date" value="${dataPadrao}" required>
+                </div>
+                <div style="flex: 1;">
+                    <label>Hora</label>
+                    <input name="hora" type="time" value="${horaPadrao}" required>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Descrição</label>
+                <input name="descricao" value="${escaparHTML(descPadrao)}" placeholder="${isGasto ? "Ex.: Carvão" : "Ex.: Venda da espetaria"}" required>
+            </div>
+
+            <div class="form-group">
+                <label>Valor (R$)</label>
+                <input name="valor" 
+                       class="moeda-input" 
+                       type="text" 
+                       inputmode="decimal" 
+                       value="${valorPadrao}" 
+                       placeholder="0,00" 
+                       required>
+            </div>
+
+            ${isGasto ? `
+                <div class="form-group">
+                    <label>Categoria</label>
+                    <select name="categoria">${optionsCategoria}</select>
+                </div>
+                <div class="form-group">
+                    <label>Pessoa</label>
+                    <select name="pessoa">${optionsPessoas}</select>
+                </div>
+                <div class="form-group">
+                    <label>Forma de pagamento</label>
+                    <select name="forma">${optionsFormas}</select>
+                </div>
+            ` : `
+                <div class="form-group">
+                    <label>Origem</label>
+                    <select name="origem">${optionsOrigem}</select>
+                </div>
+            `}
+
+            <button type="submit" class="button primary submit-button">
+                ${isEdicao ? "Salvar alterações" : (isGasto ? "Salvar gasto" : "Salvar entrada")}
+            </button>
+        `;
+    }
+
+    // Aplica formatação automática em todos os campos de valor do formulário
+    modalForm.querySelectorAll(".moeda-input").forEach(inputEl => {
+        inputEl.addEventListener("blur", () => formatarBlurInput(inputEl));
+    });
 
     modalForm.onsubmit = submeterModal;
 }
@@ -559,57 +675,114 @@ function submeterModal(event) {
     const formData = new FormData(modalForm);
     const tipo = formData.get("tipo");
     const idExistente = formData.get("id");
-    const valorNumerico = parseMoedaBR(formData.get("valor"));
 
-    if (idExistente) {
-        if (tipo === "gasto") {
-            const index = state.dados.gastos.findIndex(g => String(g.id) === String(idExistente));
+    // ================= SALVAR CARTÃO =================
+    if (tipo === "cartao") {
+        const dadosCartao = {
+            nome: formData.get("nome"),
+            limite: parseMoedaBR(formData.get("limite")),
+            vencimento: Number(formData.get("vencimento")) || null,
+            previsao: parseMoedaBR(formData.get("previsao"))
+        };
+
+        if (idExistente) {
+            const index = state.dados.cartoes.findIndex(c => String(c.id) === String(idExistente));
             if (index !== -1) {
-                state.dados.gastos[index] = {
-                    ...state.dados.gastos[index],
-                    data: formData.get("data"),
-                    hora: formData.get("hora"),
-                    descricao: formData.get("descricao"),
-                    valor: valorNumerico,
+                state.dados.cartoes[index] = {
+                    ...state.dados.cartoes[index],
+                    ...dadosCartao
+                };
+            }
+        } else {
+            state.dados.cartoes.push({
+                id: gerarId(),
+                ...dadosCartao,
+                real: dadosCartao.previsao,
+                observacao: ""
+            });
+        }
+    }
+
+    // ================= SALVAR CONTA FIXA =================
+    else if (tipo === "conta") {
+        const dadosConta = {
+            nome: formData.get("nome"),
+            vencimento: Number(formData.get("vencimento")) || null,
+            padrao: parseMoedaBR(formData.get("padrao")),
+            mes: parseMoedaBR(formData.get("mes")),
+            ativa: formData.get("ativa") === "true"
+        };
+
+        if (idExistente) {
+            const index = state.dados.contas.findIndex(c => String(c.id) === String(idExistente));
+            if (index !== -1) {
+                state.dados.contas[index] = {
+                    ...state.dados.contas[index],
+                    ...dadosConta
+                };
+            }
+        } else {
+            state.dados.contas.push({
+                id: gerarId(),
+                ...dadosConta
+            });
+        }
+    }
+
+    // ================= SALVAR GASTO / ENTRADA =================
+    else {
+        const valorNumerico = parseMoedaBR(formData.get("valor"));
+
+        if (idExistente) {
+            if (tipo === "gasto") {
+                const index = state.dados.gastos.findIndex(g => String(g.id) === String(idExistente));
+                if (index !== -1) {
+                    state.dados.gastos[index] = {
+                        ...state.dados.gastos[index],
+                        data: formData.get("data"),
+                        hora: formData.get("hora"),
+                        descricao: formData.get("descricao"),
+                        valor: valorNumerico,
+                        categoria: formData.get("categoria"),
+                        pessoa: formData.get("pessoa"),
+                        forma: formData.get("forma")
+                    };
+                }
+            } else {
+                const index = state.dados.entradas.findIndex(e => String(e.id) === String(idExistente));
+                if (index !== -1) {
+                    state.dados.entradas[index] = {
+                        ...state.dados.entradas[index],
+                        data: formData.get("data"),
+                        hora: formData.get("hora"),
+                        descricao: formData.get("descricao"),
+                        valor: valorNumerico,
+                        origem: formData.get("origem")
+                    };
+                }
+            }
+        } else {
+            const itemBase = {
+                id: gerarId(),
+                data: formData.get("data"),
+                hora: formData.get("hora") || horaAtualInput(),
+                descricao: formData.get("descricao"),
+                valor: valorNumerico
+            };
+
+            if (tipo === "gasto") {
+                state.dados.gastos.push({
+                    ...itemBase,
                     categoria: formData.get("categoria"),
                     pessoa: formData.get("pessoa"),
                     forma: formData.get("forma")
-                };
-            }
-        } else {
-            const index = state.dados.entradas.findIndex(e => String(e.id) === String(idExistente));
-            if (index !== -1) {
-                state.dados.entradas[index] = {
-                    ...state.dados.entradas[index],
-                    data: formData.get("data"),
-                    hora: formData.get("hora"),
-                    descricao: formData.get("descricao"),
-                    valor: valorNumerico,
+                });
+            } else {
+                state.dados.entradas.push({
+                    ...itemBase,
                     origem: formData.get("origem")
-                };
+                });
             }
-        }
-    } else {
-        const itemBase = {
-            id: gerarId(),
-            data: formData.get("data"),
-            hora: formData.get("hora") || horaAtualInput(),
-            descricao: formData.get("descricao"),
-            valor: valorNumerico
-        };
-
-        if (tipo === "gasto") {
-            state.dados.gastos.push({
-                ...itemBase,
-                categoria: formData.get("categoria"),
-                pessoa: formData.get("pessoa"),
-                forma: formData.get("forma")
-            });
-        } else {
-            state.dados.entradas.push({
-                ...itemBase,
-                origem: formData.get("origem")
-            });
         }
     }
 
@@ -649,14 +822,23 @@ document.addEventListener("click", event => {
     if (actionBtn) {
         const action = actionBtn.dataset.action;
 
+        // Modais de Criação
         if (action === "novo-gasto") return abrirModal("gasto");
         if (action === "nova-entrada") return abrirModal("entrada");
 
+        // Ações de Edição
         if (action === "editar-lancamento") {
             const { tipo, id } = actionBtn.dataset;
             return abrirModal(tipo.toLowerCase(), id);
         }
+        if (action === "editar-cartao") {
+            return abrirModal("cartao", actionBtn.dataset.id);
+        }
+        if (action === "editar-conta") {
+            return abrirModal("conta", actionBtn.dataset.id);
+        }
 
+        // Ações de Exclusão (com 🗑)
         if (action === "excluir-lancamento") {
             const { tipo, id } = actionBtn.dataset;
             if (confirm(`Excluir este(a) ${tipo.toLowerCase()}?`)) {
@@ -693,13 +875,14 @@ document.addEventListener("click", event => {
     }
 });
 
+// Edição rápida direta nos inputs das tabelas
 document.addEventListener("change", event => {
     if (event.target.classList.contains("input-cartao-real")) {
         const id = event.target.dataset.id;
         const val = event.target.value.trim();
         const cartao = state.dados.cartoes.find(c => String(c.id) === String(id));
         if (cartao) {
-            cartao.real = val === "" ? "" : Number(val);
+            cartao.real = val === "" ? "" : parseMoedaBR(val);
             salvarEstado();
             renderizarTudo();
         }
@@ -707,7 +890,7 @@ document.addEventListener("change", event => {
 
     if (event.target.classList.contains("input-conta-mes")) {
         const id = event.target.dataset.id;
-        const val = Number(event.target.value) || 0;
+        const val = parseMoedaBR(event.target.value);
         const conta = state.dados.contas.find(c => String(c.id) === String(id));
         if (conta) {
             conta.mes = val;
@@ -727,6 +910,7 @@ document.addEventListener("change", event => {
     }
 });
 
+// Navegação de Mês
 document.getElementById("previousMonth").addEventListener("click", () => {
     if (state.mesReferencia === 0) {
         state.mesReferencia = 11;
@@ -747,43 +931,19 @@ document.getElementById("nextMonth").addEventListener("click", () => {
     renderizarTudo();
 });
 
+// Fechar Modal
 document.getElementById("fecharModal").addEventListener("click", fecharModal);
 modal.addEventListener("click", event => {
     if (event.target.id === "modal") fecharModal();
 });
 
+// Disparadores dos botões de adicionar do topo
 document.getElementById("adicionarCartao").addEventListener("click", () => {
-    const nome = prompt("Nome do cartão:");
-    if (!nome) return;
-
-    const previsao = Number(prompt("Previsão da fatura (R$):", "0")) || 0;
-    state.dados.cartoes.push({
-        id: gerarId(),
-        nome,
-        previsao,
-        real: previsao,
-        observacao: ""
-    });
-
-    salvarEstado();
-    renderizarTudo();
+    abrirModal("cartao");
 });
 
 document.getElementById("adicionarConta").addEventListener("click", () => {
-    const nome = prompt("Nome da conta:");
-    if (!nome) return;
-
-    const valor = Number(prompt("Valor deste mês (R$):", "0")) || 0;
-    state.dados.contas.push({
-        id: gerarId(),
-        nome,
-        padrao: valor,
-        mes: valor,
-        ativa: true
-    });
-
-    salvarEstado();
-    renderizarTudo();
+    abrirModal("conta");
 });
 
 /* =====================================================
